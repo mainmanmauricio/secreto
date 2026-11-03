@@ -1,0 +1,30 @@
+{
+  "description": "Argon2id component vectors",
+  "vectors": [
+    {
+      "comment": "RFC 9106 §5.3 Argon2id (includes secret and associated data)",
+      "source": "RFC 9106",
+      "password": "0101010101010101010101010101010101010101010101010101010101010101",
+      "salt": "02020202020202020202020202020202",
+      "secret": "0303030303030303",
+      "ad": "040404040404040404040404",
+      "m_kib": 32,
+      "t": 3,
+      "p": 4,
+      "tag_length": 32,
+      "tag": "0d640df58d78766c08c037a34a8b53c9d01ef0452d75b65eb52520e96b01e659"
+    },
+    {
+      "comment": "Same inputs without secret/AD (matches OpenSSL ARGON2ID and Rust argon2 crate defaults)",
+      "password": "0101010101010101010101010101010101010101010101010101010101010101",
+      "salt": "02020202020202020202020202020202",
+      "secret": "",
+      "ad": "",
+      "m_kib": 32,
+      "t": 3,
+      "p": 4,
+      "tag_length": 32,
+      "tag": "03aab965c12001c9d7d0d2de33192c0494b684bb148196d73c1df1acaf6d0c2e"
+    }
+  ]
+}

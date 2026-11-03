@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "secreto"
+version = "0.1.0"
+description = "Independent Python implementation of the secreto/v1 file encryption format"
+requires-python = ">=3.11"
+dependencies = ["cryptography>=48,<51"]
+
+[project.optional-dependencies]
+dev = ["pytest", "hypothesis"]
+
+[project.scripts]
+secreto = "secreto.cli:entry"
+secreto-keygen = "secreto.keygen:entry"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

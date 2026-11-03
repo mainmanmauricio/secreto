@@ -1,0 +1,24 @@
+{
+  "description": "Bech32 encode/decode without BIP173 90-char limit (BIP173 charset and polymod). Secret HRPs are stored uppercase; checksum is computed over lowercase HRP.",
+  "vectors": [
+    {
+      "hrp": "secreto",
+      "data_hex": "00",
+      "encoded": "secreto1qq6704ds"
+    },
+    {
+      "hrp": "SECRETO-SECRET-KEY-",
+      "data_hex": "0000000000000000000000000000000000000000000000000000000000000000",
+      "encoded": "SECRETO-SECRET-KEY-1QQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQ0E0MDJ"
+    },
+    {
+      "hrp": "secretosig",
+      "data_hex": "ff",
+      "encoded": "secretosig1lusfmh2s"
+    }
+  ],
+  "invalid": [
+    {"encoded": "secreto1qq6704dt", "reason": "bad checksum"},
+    {"encoded": "SeCrEtO1qq6704ds", "reason": "mixed case"}
+  ]
+}

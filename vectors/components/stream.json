@@ -1,0 +1,16 @@
+{
+  "description": "STREAM chunk nonce construction and empty/non-empty final-chunk rules",
+  "chunk_size": 65536,
+  "nonce_examples": [
+    {"counter": 0, "final": false, "nonce_hex": "000000000000000000000000"},
+    {"counter": 0, "final": true, "nonce_hex": "000000000000000000000001"},
+    {"counter": 1, "final": false, "nonce_hex": "000000000000000000000100"},
+    {"counter": 1, "final": true, "nonce_hex": "000000000000000000000101"},
+    {"counter": 255, "final": true, "nonce_hex": "00000000000000000000ff01"},
+    {"counter": 256, "final": false, "nonce_hex": "000000000000000000010000"}
+  ],
+  "notes": [
+    "nonce = big-endian 11-byte counter || flag byte (0x00 or 0x01)",
+    "secreto/v1 inner plaintext is always >= 2 bytes so empty final chunk is always invalid"
+  ]
+}

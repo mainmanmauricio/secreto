@@ -1,0 +1,33 @@
+{
+  "description": "RFC 9180 Appendix A.6 Base mode key schedule values (HKDF-SHA512). Used to validate HPKE labeled HKDF Expand/Extract with SHA-512; KEM shared_secret is taken as given (P-521 DHKEM).",
+  "source": "RFC 9180 A.6.1",
+  "suite": {
+    "mode": 0,
+    "kem_id": 18,
+    "kdf_id": 3,
+    "aead_id": 2
+  },
+  "info": "4f6465206f6e2061204772656369616e2055726e",
+  "shared_secret": "776ab421302f6eff7d7cb5cb1adaea0cd50872c71c2d63c30c4f1d5e43653336fef33b103c67e7a98add2d3b66e2fda95b5b2a667aa9dac7e59cc1d46d30e818",
+  "key_schedule_context": "0083a27c5b2358ab4dae1b2f5d8f57f10ccccc822a473326f543f239a70aee46347324e84e02d7651a10d08fb3dda739d22d50c53fbfa8122baacd0f9ae5913072ef45baa1f3a4b169e141feb957e48d03f28c837d8904c3d6775308c3d3faa75dd64adfa44e1a1141edf9349959b8f8e5291cbdc56f62b0ed6527d692e85b09a4",
+  "secret": "49fd9f53b0f93732555b2054edfdc0e3101000d75df714b98ce5aa295a37f1b18dfa86a1c37286d805d3ea09a20b72f93c21e83955a1f01eb7c5eead563d21e7",
+  "key": "751e346ce8f0ddb2305c8a2a85c70d5cf559c53093656be636b9406d4d7d1b70",
+  "base_nonce": "55ff7a7d739c69f44b25447b",
+  "exporter_secret": "e4ff9dfbc732a2b9c75823763c5ccc954a2c0648fc6de80a58581252d0ee3215388a4455e69086b50b87eb28c169a52f42e71de4ca61c920e7bd24c95cc3f992",
+  "encryptions": [
+    {
+      "sequence_number": 0,
+      "pt": "4265617574792069732074727574682c20747275746820626561757479",
+      "aad": "436f756e742d30",
+      "nonce": "55ff7a7d739c69f44b25447b",
+      "ct": "170f8beddfe949b75ef9c387e201baf4132fa7374593dfafa90768788b7b2b200aafcc6d80ea4c795a7c5b841a"
+    },
+    {
+      "sequence_number": 1,
+      "pt": "4265617574792069732074727574682c20747275746820626561757479",
+      "aad": "436f756e742d31",
+      "nonce": "55ff7a7d739c69f44b25447a",
+      "ct": "d9ee248e220ca24ac00bbbe7e221a832e4f7fa64c4fbab3945b6f3af0c5ecd5e16815b328be4954a05fd352256"
+    }
+  ]
+}

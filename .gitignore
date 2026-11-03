@@ -1,0 +1,27 @@
+# Build artifacts
+/rust/target/
+/cpp/build/
+/cpp/build-asan/
+/python/.venv/
+/interop/tmp/
+/python/**/__pycache__/
+/python/**/*.egg-info/
+/python/.pytest_cache/
+/python/dist/
+/python/build/
+*.o
+*.a
+*.so
+*.dylib
+
+# IDE / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*~
+
+# Temporary / local
+*.tmp
+.write_test
+/interop/tmp/

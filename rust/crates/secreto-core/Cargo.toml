@@ -1,0 +1,36 @@
+[package]
+name = "secreto-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+description = "Reference implementation of the secreto/v1 file format"
+
+[features]
+default = []
+# Exposes deterministic (derandomized) encapsulation for test vectors.
+hazmat = []
+
+[dependencies]
+argon2.workspace = true
+base64.workspace = true
+chacha20poly1305.workspace = true
+ed25519-dalek.workspace = true
+getrandom = { workspace = true, features = ["sys_rng"] }
+hkdf.workspace = true
+hmac.workspace = true
+ml-kem.workspace = true
+ml-dsa.workspace = true
+p384.workspace = true
+sha2.workspace = true
+sha3.workspace = true
+shake.workspace = true
+subtle.workspace = true
+thiserror.workspace = true
+zeroize.workspace = true
+
+[dev-dependencies]
+serde.workspace = true
+serde_json.workspace = true
+hex.workspace = true

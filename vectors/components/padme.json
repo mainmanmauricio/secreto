@@ -1,0 +1,26 @@
+{
+  "description": "Padmé padded lengths for secreto/v1 (S = floor(floor(log2(E))/2))",
+  "vectors": [
+    {"L": 1, "padded": 1},
+    {"L": 2, "padded": 2},
+    {"L": 3, "padded": 4},
+    {"L": 4, "padded": 4},
+    {"L": 5, "padded": 8},
+    {"L": 8, "padded": 8},
+    {"L": 9, "padded": 16},
+    {"L": 16, "padded": 16},
+    {"L": 17, "padded": 24},
+    {"L": 32, "padded": 32},
+    {"L": 33, "padded": 48},
+    {"L": 64, "padded": 64},
+    {"L": 65, "padded": 96},
+    {"L": 100, "padded": 128},
+    {"L": 255, "padded": 256},
+    {"L": 256, "padded": 256},
+    {"L": 257, "padded": 384},
+    {"L": 1000, "padded": 1024},
+    {"L": 65535, "padded": 65536},
+    {"L": 65536, "padded": 65536},
+    {"L": 65537, "padded": 81920}
+  ]
+}

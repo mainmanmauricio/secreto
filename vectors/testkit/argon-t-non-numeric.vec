@@ -1,0 +1,9 @@
+expect: header-failure
+passphrase: hunter2-argon
+
+secreto/v1
+-> argon2id YRuhmrVuQJ7EcpwJx5UOUA 65536 abc 1
+eHFhv5iUod6r0IJIiccWMkpXoMd9sQ09yFYx9Y8RmQnO5KrJf4mOGNRsS15TCCnO
+
+--- n8AeWlwf27IHIRm6Qg2GjgxnRo9rDH085uEfix9nhxx7QtkG7LIXusqAOL2ZaUioBoWiL9CLgMlIkAS2Vc4jHg
+&Viaí€M*éI÷Èq¤Â$'„mgC9`«Pª¬XìZ5I¥R‡ó¢Ž9èJÚ
