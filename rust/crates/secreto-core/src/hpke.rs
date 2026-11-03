@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 secreto contributors
+// SPDX-License-Identifier: EUPL-1.2
+
 //! HPKE (RFC 9180) Base mode with KEM `0x0051` (MLKEM1024-P384),
 //! KDF `0x0003` (HKDF-SHA512) and AEAD `0x0003` (ChaCha20Poly1305).
 //!

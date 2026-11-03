@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 secreto contributors
+# SPDX-License-Identifier: EUPL-1.2
+
 """Hypothesis property tests for the bech32, header and armor parsers."""
 
 import string

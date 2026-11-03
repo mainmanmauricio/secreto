@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 secreto contributors
+// SPDX-License-Identifier: EUPL-1.2
+
 // Padme length padding (spec/format.md, "Padding").
 #pragma once
 

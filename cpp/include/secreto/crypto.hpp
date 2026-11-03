@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 secreto contributors
+// SPDX-License-Identifier: EUPL-1.2
+
 // Thin wrappers over OpenSSL 3.5 primitives used by secreto.
 #pragma once
 

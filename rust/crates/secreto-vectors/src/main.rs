@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 secreto contributors
+// SPDX-License-Identifier: EUPL-1.2
+
 //! Deterministic whole-file test-kit generator for secreto/v1.
 //!
 //! ```text

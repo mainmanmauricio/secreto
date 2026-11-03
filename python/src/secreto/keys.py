@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 secreto contributors
+# SPDX-License-Identifier: EUPL-1.2
+
 """Key types and their Bech32 encodings (spec/registry.md, *Bech32 HRPs*)."""
 
 from __future__ import annotations

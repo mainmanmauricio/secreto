@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 secreto contributors
+// SPDX-License-Identifier: EUPL-1.2
+
 // Runs every vectors/testkit/*.vec file, either through the library
 // (default) or through the `secreto` binary (--cli PATH).
 #include <sys/wait.h>

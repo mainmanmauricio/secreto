@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 secreto contributors
+// SPDX-License-Identifier: EUPL-1.2
+
 //! STREAM ChaCha20-Poly1305 payload (`spec/format.md`, *Payload*).
 //!
 //! Payload layout: `nonce (16) || chunk_0 || ... || chunk_n`, where each

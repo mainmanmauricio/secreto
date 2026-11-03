@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 secreto contributors
+# SPDX-License-Identifier: EUPL-1.2
+
 """HPKE (RFC 9180) Base-mode Seal/Open for MLKEM1024-P384 / HKDF-SHA512 / ChaCha20Poly1305."""
 
 from __future__ import annotations

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 secreto contributors
+# SPDX-License-Identifier: EUPL-1.2
+
 """Minimal pure-Python ML-KEM-1024 *deterministic encapsulation* (FIPS 203).
 
 ``cryptography`` only exposes randomised encapsulation, but the component test

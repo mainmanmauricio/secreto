@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 secreto contributors
+# SPDX-License-Identifier: EUPL-1.2
+
 """Decryption (spec/format.md, *Decryption order of checks*)."""
 
 from __future__ import annotations

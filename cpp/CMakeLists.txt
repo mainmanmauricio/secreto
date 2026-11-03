@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 secreto contributors
+# SPDX-License-Identifier: EUPL-1.2
+
 cmake_minimum_required(VERSION 3.20)
 project(secreto-cpp VERSION 1.0.0 LANGUAGES CXX)
 

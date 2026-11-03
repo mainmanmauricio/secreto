@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 secreto contributors
+# SPDX-License-Identifier: EUPL-1.2
+
 .PHONY: build test vectors vectors-check interop check \
 	build-rust build-python build-cpp \
 	test-rust test-python test-cpp test-cpp-asan

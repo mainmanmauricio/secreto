@@ -1,3 +1,8 @@
+<!--
+SPDX-FileCopyrightText: 2026 secreto contributors
+SPDX-License-Identifier: EUPL-1.2
+-->
+
 # secreto CLI (normative)
 
 Implementations MUST provide two programs: `secreto` and `secreto-keygen`.

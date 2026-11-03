@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 secreto contributors
+// SPDX-License-Identifier: EUPL-1.2
+
 //! Error type shared by all `secreto-core` modules.
 //!
 //! Every variant maps onto one of the normative exit codes of `spec/cli.md`

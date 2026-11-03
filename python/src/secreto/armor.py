@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 secreto contributors
+# SPDX-License-Identifier: EUPL-1.2
+
 """Strict PEM armor (RFC 7468 §3), label ``SECRETO ENCRYPTED FILE``."""
 
 from __future__ import annotations

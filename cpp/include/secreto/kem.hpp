@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 secreto contributors
+// SPDX-License-Identifier: EUPL-1.2
+
 // MLKEM1024-P384 hybrid KEM (CG framework, SHA3-256 combiner, SHAKE256 PRG).
 #pragma once
 

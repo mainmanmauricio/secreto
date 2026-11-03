@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 secreto contributors
+// SPDX-License-Identifier: EUPL-1.2
+
 // Shared basic types: byte buffers, secret-cleansing allocator, errors.
 #pragma once
 

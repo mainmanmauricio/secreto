@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 secreto contributors
+// SPDX-License-Identifier: EUPL-1.2
+
 //! Inner plaintext: `flags || content || 0x80 || 0x00*k || [sigblock]`
 //! (`spec/format.md`, *Inner plaintext*).
 

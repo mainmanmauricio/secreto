@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 secreto contributors
+// SPDX-License-Identifier: EUPL-1.2
+
 // Strict (canonical) standard-alphabet Base64, RFC 4648 section 4.
 #pragma once
 

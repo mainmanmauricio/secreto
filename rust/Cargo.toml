@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 secreto contributors
+# SPDX-License-Identifier: EUPL-1.2
+
 [workspace]
 resolver = "2"
 members = [
@@ -9,7 +12,7 @@ members = [
 [workspace.package]
 version = "0.1.0"
 edition = "2021"
-license = "MIT OR Apache-2.0"
+license = "EUPL-1.2"
 authors = ["secreto contributors"]
 rust-version = "1.88"
 

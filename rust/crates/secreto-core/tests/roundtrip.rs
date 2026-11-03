@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 secreto contributors
+// SPDX-License-Identifier: EUPL-1.2
+
 //! End-to-end tests of the secreto/v1 format using the public API.
 
 use secreto_core::argon::{self, ArgonParams};

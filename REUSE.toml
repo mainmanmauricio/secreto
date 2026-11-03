@@ -1,0 +1,13 @@
+# SPDX-FileCopyrightText: 2026 secreto contributors
+# SPDX-License-Identifier: EUPL-1.2
+
+version = 1
+
+[[annotations]]
+path = [
+    "vectors/**",
+    "rust/Cargo.lock",
+]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 secreto contributors"
+SPDX-License-Identifier = "EUPL-1.2"

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 secreto contributors
+// SPDX-License-Identifier: EUPL-1.2
+
 // Minimal test helpers: CHECK macros, file reading, hex, and a tiny JSON parser.
 #pragma once
 

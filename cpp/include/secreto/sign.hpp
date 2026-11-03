@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 secreto contributors
+// SPDX-License-Identifier: EUPL-1.2
+
 // Hybrid signatures: Ed25519 + ML-DSA-87 (empty context), keys from seeds.
 #pragma once
 

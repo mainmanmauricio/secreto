@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 secreto contributors
+// SPDX-License-Identifier: EUPL-1.2
+
 //! `secreto-keygen` — generate and inspect secreto keys (`spec/cli.md`).
 
 use clap::error::ErrorKind;

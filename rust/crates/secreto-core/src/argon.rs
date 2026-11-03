@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 secreto contributors
+// SPDX-License-Identifier: EUPL-1.2
+
 //! Passphrase recipient: Argon2id wrap of the file key
 //! (`spec/format.md`, *Recipient type: argon2id*).
 

@@ -1,3 +1,8 @@
+<!--
+SPDX-FileCopyrightText: 2026 secreto contributors
+SPDX-License-Identifier: EUPL-1.2
+-->
+
 # References (pinned)
 
 These versions define secreto/v1. Implementations MUST use the algorithms as

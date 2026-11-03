@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 secreto contributors
+// SPDX-License-Identifier: EUPL-1.2
+
 //! MLKEM1024-P384 hybrid KEM (HPKE KEM id `0x0051`), CG framework with the
 //! C2PRI combiner, per `draft-irtf-cfrg-concrete-hybrid-kems-04` /
 //! `draft-irtf-cfrg-hybrid-kems-12`.

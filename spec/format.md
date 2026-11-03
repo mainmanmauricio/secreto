@@ -1,3 +1,8 @@
+<!--
+SPDX-FileCopyrightText: 2026 secreto contributors
+SPDX-License-Identifier: EUPL-1.2
+-->
+
 # secreto/v1 file format
 
 This document is normative. The key words MUST, MUST NOT, SHOULD, MAY are as

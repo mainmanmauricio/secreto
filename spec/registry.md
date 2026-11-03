@@ -1,3 +1,8 @@
+<!--
+SPDX-FileCopyrightText: 2026 secreto contributors
+SPDX-License-Identifier: EUPL-1.2
+-->
+
 # Algorithm registry (secreto/v1)
 
 Only the identifiers listed here are valid in secreto/v1. Implementations

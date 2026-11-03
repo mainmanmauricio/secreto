@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 secreto contributors
+// SPDX-License-Identifier: EUPL-1.2
+
 //! Hand-rolled Bech32 (BIP 173 charset and polymod) **without** the 90
 //! character limit. Strings are limited to 8192 characters instead
 //! (`spec/format.md`, *Limits*).

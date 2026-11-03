@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 secreto contributors
+// SPDX-License-Identifier: EUPL-1.2
+
 //! Header parsing, serialization and MAC (`spec/format.md`, *Header*).
 
 use crate::error::{Error, Result};

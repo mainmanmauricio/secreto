@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 secreto contributors
+// SPDX-License-Identifier: EUPL-1.2
+
 // secreto/v1 header: version line, recipient stanzas, MAC line.
 #pragma once
 

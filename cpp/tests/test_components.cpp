@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 secreto contributors
+// SPDX-License-Identifier: EUPL-1.2
+
 // Component vectors: vectors/components/*.json
 #include <openssl/evp.h>
 

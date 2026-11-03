@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 secreto contributors
+// SPDX-License-Identifier: EUPL-1.2
+
 // Bech32 (BIP173 charset and checksum) without the 90-character limit.
 #pragma once
 

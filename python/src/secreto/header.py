@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 secreto contributors
+# SPDX-License-Identifier: EUPL-1.2
+
 """Header parsing and serialisation (spec/format.md, *Header*)."""
 
 from __future__ import annotations

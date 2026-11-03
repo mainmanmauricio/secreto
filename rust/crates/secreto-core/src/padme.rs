@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 secreto contributors
+// SPDX-License-Identifier: EUPL-1.2
+
 //! Padmé length padding (`spec/format.md`, *Padding*).
 
 /// Padmé(L): the padded length for an unpadded length `l`.

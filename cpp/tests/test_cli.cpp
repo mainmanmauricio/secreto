@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 secreto contributors
+// SPDX-License-Identifier: EUPL-1.2
+
 // CLI integration tests: drives the `secreto` and `secreto-keygen` binaries.
 // usage: test_cli PATH-TO-secreto PATH-TO-secreto-keygen
 #include <sys/stat.h>

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 secreto contributors
+// SPDX-License-Identifier: EUPL-1.2
+
 // Unit tests for the library building blocks and end-to-end round trips.
 #include <algorithm>
 #include <cctype>

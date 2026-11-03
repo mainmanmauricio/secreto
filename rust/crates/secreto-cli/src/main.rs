@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 secreto contributors
+// SPDX-License-Identifier: EUPL-1.2
+
 //! `secreto` — encrypt and decrypt files (`spec/cli.md`).
 
 use clap::error::ErrorKind;

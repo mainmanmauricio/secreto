@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 secreto contributors
+# SPDX-License-Identifier: EUPL-1.2
+
 """STREAM payload encryption (age variant, 64 KiB chunks)."""
 
 from __future__ import annotations

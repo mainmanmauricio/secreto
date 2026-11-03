@@ -1,3 +1,8 @@
+<!--
+SPDX-FileCopyrightText: 2026 secreto contributors
+SPDX-License-Identifier: EUPL-1.2
+-->
+
 # secreto
 
 File encryption with authenticated encryption, hybrid post-quantum key
@@ -87,3 +92,10 @@ Individual targets: `make test`, `make vectors-check`, `make interop`,
   prints a warning naming the signer ID.
 - Passphrase encryption intentionally costs ~1 GiB RAM; decryption accepts
   a bounded parameter range to resist DoS while rejecting weak files.
+
+## License
+
+Copyright 2026 secreto contributors.
+
+Licensed under the EUPL (European Union Public Licence), version 1.2.
+See [LICENSE](LICENSE). Source files carry `SPDX-License-Identifier: EUPL-1.2`.

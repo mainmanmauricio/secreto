@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 secreto contributors
+# SPDX-License-Identifier: EUPL-1.2
+
 """Cross-implementation interop harness for secreto (Rust, Python, C++).
 
 Encrypt with each implementation and decrypt with each of the three (3x3).
