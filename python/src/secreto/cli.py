@@ -13,8 +13,8 @@ import sys
 from pathlib import Path
 
 from . import __version__, keys
-from .decrypt import decrypt
-from .encrypt import encrypt, encrypt_armored
+from .decrypt import decrypt_to
+from .encrypt import encrypt_to
 from .error import InvalidKeyError, IoError, SecretoError
 
 ENV_PASSPHRASE_FD = "SECRETO_PASSPHRASE_FD"
@@ -23,7 +23,7 @@ MAX_PASSPHRASE_LEN = 1 << 20
 
 USAGE = (
     "secreto [-e] (-r RECIPIENT | -R FILE)... [--sign KEYFILE] [--pad] [-a] [-o OUT] [IN]\n"
-    "       secreto [-e] -p [--sign KEYFILE] [--pad] [-a] [-o OUT] [IN]\n"
+    "       secreto [-e] -p [--memory MIB] [--sign KEYFILE] [--pad] [-a] [-o OUT] [IN]\n"
     "       secreto -d (-i FILE)... | -p [--verify SIGNER_PUB] [-o OUT] [IN]"
 )
 
@@ -165,8 +165,31 @@ def write_stdout(data: bytes) -> None:
 
 def write_output(out: str | None, data: bytes) -> None:
     """Write to stdout, or atomically (O_EXCL temp 0600, fsync, rename) to ``out``."""
+
+    def _write(f) -> None:
+        f.write(data)
+
+    with_output(out, _write)
+
+
+def open_input(path: str | None):
+    """Open stdin or a file for streaming reads (caller must close file objects)."""
+    if is_std(path):
+        return sys.stdin.buffer, False
+    try:
+        return open(path, "rb"), True  # type: ignore[arg-type]
+    except OSError as e:
+        raise IoError(f"{path}: {e.strerror or e}") from None
+
+
+def with_output(out: str | None, write_fn) -> None:
+    """Call ``write_fn(fileobj)`` with stdout or an atomic temp file."""
     if is_std(out):
-        write_stdout(data)
+        try:
+            write_fn(sys.stdout.buffer)
+            sys.stdout.buffer.flush()
+        except OSError as e:
+            raise IoError(f"writing stdout: {e.strerror or e}") from None
         return
     target = Path(out)  # type: ignore[arg-type]
     directory = target.parent if str(target.parent) else Path(".")
@@ -191,7 +214,7 @@ def write_output(out: str | None, data: bytes) -> None:
     try:
         try:
             with os.fdopen(fd, "wb") as f:
-                f.write(data)
+                write_fn(f)
                 f.flush()
                 os.fsync(f.fileno())
             os.replace(tmp, target)
@@ -256,6 +279,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("-R", dest="recipient_files", action="append", default=[], metavar="FILE")
     p.add_argument("-i", dest="identities", action="append", default=[], metavar="FILE")
     p.add_argument("-p", dest="passphrase", action="store_true")
+    p.add_argument("--memory", type=int, metavar="MIB", dest="memory")
     p.add_argument("-a", dest="armor", action="store_true")
     p.add_argument("-o", dest="output", metavar="OUT")
     p.add_argument("--pad", action="store_true")
@@ -263,6 +287,18 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--verify", metavar="SIGNER_PUB")
     p.add_argument("input", nargs="?", metavar="IN")
     return p
+
+
+def _argon_from_args(a: argparse.Namespace) -> dict[str, int]:
+    from . import argon
+
+    if a.memory is None:
+        return {"m_kib": argon.DEFAULT_M, "t": argon.DEFAULT_T, "p": argon.DEFAULT_P}
+    if not a.passphrase:
+        raise InvalidKeyError("--memory requires -p")
+    if not (64 <= a.memory <= 4096):
+        raise InvalidKeyError("--memory must be an integer between 64 and 4096 (MiB)")
+    return {"m_kib": a.memory * 1024, "t": argon.DEFAULT_T, "p": argon.DEFAULT_P}
 
 
 def _determine_mode(a: argparse.Namespace) -> str:
@@ -323,15 +359,31 @@ def _run_encrypt(a: argparse.Namespace) -> None:
             signer = keys.parse_signing_key(text)
         except SecretoError as e:
             raise type(e)(f"{a.sign}: {e}") from None
+    argon_kw = _argon_from_args(a)
     pw = None
     if a.passphrase:
         pw = read_passphrase(True)
         if not pw:
             raise InvalidKeyError("empty passphrase")
-    data = read_input(a.input)
-    kwargs = dict(recipients=recips or None, passphrase=pw, pad=a.pad, signer=signer)
-    out = encrypt_armored(data, **kwargs) if a.armor else encrypt(data, **kwargs)
-    write_output(a.output, out)
+    inp, close_inp = open_input(a.input)
+    try:
+
+        def _enc(out) -> None:
+            encrypt_to(
+                inp,
+                out,
+                recipients=recips or None,
+                passphrase=pw,
+                pad=a.pad,
+                signer=signer,
+                armored=a.armor,
+                **argon_kw,
+            )
+
+        with_output(a.output, _enc)
+    finally:
+        if close_inp:
+            inp.close()
 
 
 def _load_verify_key(arg: str):
@@ -356,8 +408,8 @@ def _load_verify_key(arg: str):
 def _run_decrypt(a: argparse.Namespace) -> None:
     if a.recipients or a.recipient_files:
         raise InvalidKeyError("-r/-R are only valid when encrypting")
-    if a.armor or a.pad or a.sign is not None:
-        raise InvalidKeyError("-a, --pad and --sign are only valid when encrypting")
+    if a.armor or a.pad or a.sign is not None or a.memory is not None:
+        raise InvalidKeyError("-a, --pad, --sign and --memory are only valid when encrypting")
     if a.passphrase and a.identities:
         raise InvalidKeyError("-p cannot be combined with -i")
     if not a.passphrase and not a.identities:
@@ -371,16 +423,44 @@ def _run_decrypt(a: argparse.Namespace) -> None:
             raise type(e)(f"{f}: {e}") from None
     verify = _load_verify_key(a.verify) if a.verify is not None else None
     pw = read_passphrase(False) if a.passphrase else None
-    data = read_input(a.input)
-    dec = decrypt(data, identities=ids, passphrase=pw, verify=verify)
-    if dec.signer_id is not None and not dec.verified:
-        warn(
-            "secreto",
-            f"file is signed by signer_id {dec.signer_id.hex()}; signature NOT verified (use --verify)",
-        )
-    if is_std(a.output) and verify is not None and len(dec.content) > MAX_STDOUT_BUFFER:
-        raise InvalidKeyError("verified content exceeds 256 MiB; use -o to write to a file")
-    write_output(a.output, dec.content)
+    inp, close_inp = open_input(a.input)
+    try:
+        if is_std(a.output) and verify is not None:
+            import io
+
+            buf = io.BytesIO()
+            meta = decrypt_to(inp, buf, identities=ids, passphrase=pw, verify=verify)
+            content = buf.getvalue()
+            if len(content) > MAX_STDOUT_BUFFER:
+                raise InvalidKeyError(
+                    "verified content exceeds 256 MiB; use -o to write to a file"
+                )
+            if meta.signer_id is not None and not meta.verified:
+                warn(
+                    "secreto",
+                    f"file is signed by signer_id {meta.signer_id.hex()}; "
+                    "signature NOT verified (use --verify)",
+                )
+            write_output(None, content)
+        else:
+            meta_holder: list = []
+
+            def _dec(out) -> None:
+                meta_holder.append(
+                    decrypt_to(inp, out, identities=ids, passphrase=pw, verify=verify)
+                )
+
+            with_output(a.output, _dec)
+            meta = meta_holder[0]
+            if meta.signer_id is not None and not meta.verified:
+                warn(
+                    "secreto",
+                    f"file is signed by signer_id {meta.signer_id.hex()}; "
+                    "signature NOT verified (use --verify)",
+                )
+    finally:
+        if close_inp:
+            inp.close()
 
 
 def main(argv: list[str] | None = None) -> int:

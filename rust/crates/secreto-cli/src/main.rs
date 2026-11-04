@@ -6,13 +6,14 @@
 use clap::error::ErrorKind;
 use clap::Parser;
 use secreto_cli::{
-    die, is_std, lower_hex, read_input, read_passphrase, read_secret_key_file, read_text_file,
-    warn, write_output, CliError, Result, MAX_STDOUT_BUFFER,
+    die, is_std, lower_hex, open_input, read_passphrase, read_secret_key_file, read_text_file,
+    warn, with_output, CliError, Result, MAX_STDOUT_BUFFER,
 };
+use secreto_core::argon::ArgonParams;
 use secreto_core::keys::{parse_identities, parse_recipients, parse_signing_key};
 use secreto_core::{
-    decrypt, encrypt, encrypt_armored, DecryptOptions, EncryptOptions, Recipient, Recipients,
-    SignerPublicKey,
+    decrypt_to, encrypt_armored_to, encrypt_to, DecryptOptions, EncryptOptions, Recipient,
+    Recipients, SignerPublicKey,
 };
 use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
@@ -41,6 +42,9 @@ struct Args {
     /// Passphrase mode
     #[arg(short = 'p')]
     passphrase: bool,
+    /// Argon2id memory cost in MiB (encrypt + `-p` only; default 64; range 64–4096)
+    #[arg(long, value_name = "MIB")]
+    memory: Option<u32>,
     /// ASCII armor output (encrypt only)
     #[arg(short = 'a')]
     armor: bool,
@@ -63,8 +67,24 @@ struct Args {
 
 const USAGE: &str =
     "secreto [-e] (-r RECIPIENT | -R FILE)... [--sign KEYFILE] [--pad] [-a] [-o OUT] [IN]\n       \
-secreto [-e] -p [--sign KEYFILE] [--pad] [-a] [-o OUT] [IN]\n       \
+secreto [-e] -p [--memory MIB] [--sign KEYFILE] [--pad] [-a] [-o OUT] [IN]\n       \
 secreto -d (-i FILE)... | -p [--verify SIGNER_PUB] [-o OUT] [IN]";
+
+/// Resolve `--memory MIB` into ArgonParams. Exit 1 on misuse.
+fn argon_params_from_args(a: &Args) -> Result<ArgonParams> {
+    match a.memory {
+        None => Ok(ArgonParams::DEFAULT),
+        Some(_) if !a.passphrase => Err(CliError::usage("--memory requires -p")),
+        Some(mib) if !(64..=4096).contains(&mib) => Err(CliError::usage(
+            "--memory must be an integer between 64 and 4096 (MiB)",
+        )),
+        Some(mib) => Ok(ArgonParams {
+            m_kib: mib.saturating_mul(1024),
+            t: ArgonParams::DEFAULT.t,
+            p: ArgonParams::DEFAULT.p,
+        }),
+    }
+}
 
 #[derive(PartialEq, Eq)]
 enum Mode {
@@ -144,6 +164,7 @@ fn run_encrypt(a: &Args) -> Result<()> {
         }
         None => None,
     };
+    let argon = argon_params_from_args(a)?;
     let pw = if a.passphrase {
         let pw = read_passphrase(true)?;
         if pw.is_empty() {
@@ -154,21 +175,24 @@ fn run_encrypt(a: &Args) -> Result<()> {
         None
     };
 
-    let input = read_input(a.input.as_deref())?;
     let opts = EncryptOptions {
         pad: a.pad,
         signer: signer.as_ref(),
+        argon,
     };
-    let recipients = match &pw {
-        Some(pw) => Recipients::Passphrase(pw),
-        None => Recipients::Keys(&keys),
-    };
-    let out: Vec<u8> = if a.armor {
-        encrypt_armored(&input, recipients, &opts)?.into_bytes()
-    } else {
-        encrypt(&input, recipients, &opts)?
-    };
-    write_output(a.output.as_deref(), &out)
+    let mut input = open_input(a.input.as_deref())?;
+    with_output(a.output.as_deref(), |out| {
+        let recipients = match &pw {
+            Some(pw) => Recipients::Passphrase(pw),
+            None => Recipients::Keys(&keys),
+        };
+        if a.armor {
+            encrypt_armored_to(&mut *input, out, recipients, &opts)?;
+        } else {
+            encrypt_to(&mut *input, out, recipients, &opts)?;
+        }
+        Ok(())
+    })
 }
 
 fn load_verify_key(arg: &str) -> Result<SignerPublicKey> {
@@ -198,9 +222,9 @@ fn run_decrypt(a: &Args) -> Result<()> {
     if !a.recipients.is_empty() || !a.recipient_files.is_empty() {
         return Err(CliError::usage("-r/-R are only valid when encrypting"));
     }
-    if a.armor || a.pad || a.sign.is_some() {
+    if a.armor || a.pad || a.sign.is_some() || a.memory.is_some() {
         return Err(CliError::usage(
-            "-a, --pad and --sign are only valid when encrypting",
+            "-a, --pad, --sign and --memory are only valid when encrypting",
         ));
     }
     if a.passphrase && !a.identities.is_empty() {
@@ -226,31 +250,57 @@ fn run_decrypt(a: &Args) -> Result<()> {
         None
     };
 
-    let input = read_input(a.input.as_deref())?;
     let opts = DecryptOptions {
         identities: &ids,
         passphrase: pw.as_ref().map(|p| p.as_slice()),
         verify: verify.as_ref(),
     };
-    let dec = decrypt(&input, &opts)?;
+    let mut input = open_input(a.input.as_deref())?;
 
-    if let (Some(id), false) = (dec.signer_id, dec.verified) {
-        warn(
-            PROG,
-            &format!(
-                "file is signed by signer_id {}; signature NOT verified (use --verify)",
-                lower_hex(&id)
-            ),
-        );
+    // With --verify to stdout, buffer so we can enforce the 256 MiB cap and
+    // avoid releasing content on failure. decrypt_to already verifies before
+    // writing; the buffer is only for the size check.
+    if is_std(a.output.as_deref()) && verify.is_some() {
+        let mut buf = Vec::new();
+        let meta = decrypt_to(&mut *input, &mut buf, &opts)?;
+        if buf.len() > MAX_STDOUT_BUFFER {
+            return Err(CliError::usage(
+                "verified content exceeds 256 MiB; use -o to write to a file",
+            ));
+        }
+        if let (Some(id), false) = (meta.signer_id, meta.verified) {
+            warn(
+                PROG,
+                &format!(
+                    "file is signed by signer_id {}; signature NOT verified (use --verify)",
+                    lower_hex(&id)
+                ),
+            );
+        }
+        with_output(None, |out| {
+            out.write_all(&buf)
+                .map_err(|e| CliError::io(format!("writing stdout: {e}")))
+        })
+    } else {
+        let mut meta_slot = None;
+        with_output(a.output.as_deref(), |out| {
+            let meta = decrypt_to(&mut *input, out, &opts)?;
+            meta_slot = Some(meta);
+            Ok(())
+        })?;
+        if let Some(meta) = meta_slot {
+            if let (Some(id), false) = (meta.signer_id, meta.verified) {
+                warn(
+                    PROG,
+                    &format!(
+                        "file is signed by signer_id {}; signature NOT verified (use --verify)",
+                        lower_hex(&id)
+                    ),
+                );
+            }
+        }
+        Ok(())
     }
-    // The plaintext is only released here, after every check (including the
-    // signature, when --verify was given) has passed.
-    if is_std(a.output.as_deref()) && dec.content.len() > MAX_STDOUT_BUFFER && verify.is_some() {
-        return Err(CliError::usage(
-            "verified content exceeds 256 MiB; use -o to write to a file",
-        ));
-    }
-    write_output(a.output.as_deref(), &dec.content)
 }
 
 fn run() -> Result<()> {

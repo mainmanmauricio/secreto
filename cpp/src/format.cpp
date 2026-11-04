@@ -4,6 +4,11 @@
 #include "secreto/format.hpp"
 
 #include <algorithm>
+#include <cstdio>
+#include <cstring>
+#include <memory>
+
+#include <openssl/evp.h>
 
 #include "secreto/armor.hpp"
 #include "secreto/base64.hpp"
@@ -18,6 +23,12 @@
 namespace secreto {
 
 namespace {
+
+struct MdCtxDel {
+  void operator()(EVP_MD_CTX* c) const { EVP_MD_CTX_free(c); }
+};
+using MdCtx = std::unique_ptr<EVP_MD_CTX, MdCtxDel>;
+
 
 constexpr std::string_view kTypeMlkem = "mlkem1024p384";
 constexpr std::string_view kTypeArgon = "argon2id";
@@ -223,6 +234,98 @@ Bytes encrypt(ByteView content, const EncryptOptions& opts) {
     return Bytes(a.begin(), a.end());
   }
   return out;
+}
+
+void encrypt_to(std::FILE* in, std::FILE* out, const EncryptOptions& opts) {
+  const bool has_recipients = !opts.recipients.empty();
+  const bool has_pass = opts.passphrase.has_value();
+  if (has_recipients == has_pass)
+    fail(kExitUsage, "encryption needs either recipients or a passphrase (not both)");
+
+  SecretBytes file_key = random_secret(kFileKeyLen);
+  std::vector<header::Stanza> stanzas;
+  if (has_pass) {
+    stanzas.push_back(make_argon_stanza(*opts.passphrase, file_key, opts.argon));
+  } else {
+    for (const Bytes& ek : opts.recipients) stanzas.push_back(make_mlkem_stanza(ek, file_key));
+  }
+  if (stanzas.size() > header::kMaxStanzas) fail(kExitUsage, "too many recipients");
+
+  Bytes mac_in = header::mac_input(stanzas);
+  auto mac = header::compute_mac(file_key, mac_in);
+  Bytes hdr = header::finish(mac_in, mac);
+  if (std::fwrite(hdr.data(), 1, hdr.size(), out) != hdr.size())
+    fail(kExitIo, "writing header");
+
+  Bytes nonce = random_bytes(stream::kNonceLen);
+  if (std::fwrite(nonce.data(), 1, nonce.size(), out) != nonce.size())
+    fail(kExitIo, "writing nonce");
+  SecretBytes payload_key = stream::derive_payload_key(file_key, nonce);
+
+  const bool signed_file = opts.signing_key.has_value();
+  Bytes buf;
+  buf.reserve(stream::kChunkSize);
+  buf.push_back(signed_file ? 0x01 : 0x00);
+
+  MdCtx hash_ctx;
+  if (signed_file) {
+    hash_ctx.reset(EVP_MD_CTX_new());
+    if (!hash_ctx || EVP_DigestInit_ex(hash_ctx.get(), EVP_sha512(), nullptr) != 1)
+      fail(kExitIo, "SHA-512 init failed");
+  }
+
+  std::uint64_t content_len = 0;
+  std::uint64_t counter = 0;
+  std::uint8_t readbuf[8192];
+
+  auto flush_full = [&]() {
+    while (buf.size() >= stream::kChunkSize) {
+      ByteView chunk(buf.data(), stream::kChunkSize);
+      auto n = stream::chunk_nonce(counter, false);
+      Bytes ct = chacha20poly1305_seal(payload_key, n, {}, chunk);
+      if (std::fwrite(ct.data(), 1, ct.size(), out) != ct.size()) fail(kExitIo, "writing chunk");
+      buf.erase(buf.begin(), buf.begin() + static_cast<std::ptrdiff_t>(stream::kChunkSize));
+      ++counter;
+    }
+  };
+
+  for (;;) {
+    std::size_t n = std::fread(readbuf, 1, sizeof(readbuf), in);
+    if (n == 0) {
+      if (std::ferror(in)) fail(kExitIo, "reading input");
+      break;
+    }
+    if (signed_file && EVP_DigestUpdate(hash_ctx.get(), readbuf, n) != 1)
+      fail(kExitIo, "SHA-512 update failed");
+    content_len += n;
+    buf.insert(buf.end(), readbuf, readbuf + n);
+    flush_full();
+  }
+
+  Bytes sigblock;
+  if (signed_file) {
+    Bytes digest(64);
+    unsigned int dlen = 0;
+    if (EVP_DigestFinal_ex(hash_ctx.get(), digest.data(), &dlen) != 1 || dlen != 64)
+      fail(kExitIo, "SHA-512 final failed");
+    Bytes msg = sign::signature_message_hashed(mac, content_len, digest);
+    sigblock = sign::sign_msg(*opts.signing_key, msg);
+  }
+
+  std::uint64_t unpadded =
+      1 + content_len + 1 + (signed_file ? sign::kSigblockLen : 0);
+  std::uint64_t k = opts.pad ? (padme(unpadded) - unpadded) : 0;
+  buf.push_back(0x80);
+  buf.insert(buf.end(), static_cast<std::size_t>(k), 0);
+  if (signed_file) append(buf, sigblock);
+
+  flush_full();
+  if (buf.empty()) format_error("empty STREAM plaintext");
+  {
+    auto n = stream::chunk_nonce(counter, true);
+    Bytes ct = chacha20poly1305_seal(payload_key, n, {}, buf);
+    if (std::fwrite(ct.data(), 1, ct.size(), out) != ct.size()) fail(kExitIo, "writing final chunk");
+  }
 }
 
 // -------------------------------------------------------------------- decrypt

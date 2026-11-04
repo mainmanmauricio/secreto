@@ -95,21 +95,25 @@ std::array<std::uint8_t, kSignerIdLen> signer_id(ByteView pk) {
   return id;
 }
 
-Bytes signature_message(ByteView header_mac, ByteView content) {
+Bytes signature_message_hashed(ByteView header_mac, std::uint64_t content_len,
+                               ByteView content_hash) {
   Bytes msg;
   append(msg, std::string_view("secreto/v1/signature"));
   append(msg, header_mac);
-  std::uint64_t n = content.size();
-  for (int i = 7; i >= 0; --i) msg.push_back(static_cast<std::uint8_t>((n >> (8 * i)) & 0xff));
-  auto h = sha512(content);
-  append(msg, ByteView(h));
+  for (int i = 7; i >= 0; --i)
+    msg.push_back(static_cast<std::uint8_t>((content_len >> (8 * i)) & 0xff));
+  append(msg, content_hash);
   return msg;
 }
 
-Bytes sign(ByteView sk, ByteView header_mac, ByteView content) {
+Bytes signature_message(ByteView header_mac, ByteView content) {
+  auto h = sha512(content);
+  return signature_message_hashed(header_mac, content.size(), ByteView(h));
+}
+
+Bytes sign_msg(ByteView sk, ByteView msg) {
   check_secret_key(sk);
   Bytes pk = public_key(sk);
-  Bytes msg = signature_message(header_mac, content);
 
   Pkey ed = ed25519_private(sk.first(32));
   Pkey ml = mldsa_private(sk.subspan(32, 32));
@@ -142,6 +146,10 @@ Bytes sign(ByteView sk, ByteView header_mac, ByteView content) {
     append(out, sig);
   }
   return out;
+}
+
+Bytes sign(ByteView sk, ByteView header_mac, ByteView content) {
+  return sign_msg(sk, signature_message(header_mac, content));
 }
 
 void verify(ByteView pk, ByteView sigblock, ByteView header_mac, ByteView content) {

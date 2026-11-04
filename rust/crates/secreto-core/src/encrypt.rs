@@ -10,9 +10,12 @@ use crate::header::{self, Stanza, MAX_STANZAS, TYPE_MLKEM};
 use crate::hpke;
 use crate::inner;
 use crate::keys::Recipient;
-use crate::sign::{signature_message, SigningKey};
-use crate::stream;
+use crate::padme;
+use crate::sign::{signature_message, signature_message_hashed, SigningKey};
+use crate::stream::{self, StreamEncryptor, CHUNK_SIZE};
 use base64::{engine::general_purpose::STANDARD_NO_PAD, Engine};
+use sha2::{Digest, Sha512};
+use std::io::{Read, Write};
 use zeroize::Zeroizing;
 
 /// Who to encrypt to.
@@ -25,12 +28,24 @@ pub enum Recipients<'a> {
 }
 
 /// Encryption options.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct EncryptOptions<'a> {
     /// Apply Padmé length padding.
     pub pad: bool,
     /// Sign the content with this key.
     pub signer: Option<&'a SigningKey>,
+    /// Argon2id parameters used when encrypting to a passphrase.
+    pub argon: argon::ArgonParams,
+}
+
+impl Default for EncryptOptions<'_> {
+    fn default() -> Self {
+        Self {
+            pad: false,
+            signer: None,
+            argon: argon::ArgonParams::DEFAULT,
+        }
+    }
 }
 
 fn random<const N: usize>() -> Result<[u8; N]> {
@@ -49,14 +64,12 @@ pub fn mlkem_stanza(recipient: &Recipient, file_key: &[u8; 32]) -> Result<Stanza
     })
 }
 
-/// Encrypt `content` for `recipients`. Returns the binary `.sec` file.
-pub fn encrypt(
-    content: &[u8],
+fn build_stanzas(
+    file_key: &[u8; 32],
     recipients: Recipients<'_>,
     opts: &EncryptOptions<'_>,
-) -> Result<Vec<u8>> {
-    let file_key = Zeroizing::new(random::<32>()?);
-    let stanzas = match recipients {
+) -> Result<Vec<Stanza>> {
+    match recipients {
         Recipients::Keys(keys) => {
             if keys.is_empty() {
                 return Err(Error::InvalidKey("no recipients"));
@@ -65,11 +78,26 @@ pub fn encrypt(
                 return Err(Error::InvalidKey("too many recipients"));
             }
             keys.iter()
-                .map(|r| mlkem_stanza(r, &file_key))
-                .collect::<Result<Vec<_>>>()?
+                .map(|r| mlkem_stanza(r, file_key))
+                .collect::<Result<Vec<_>>>()
         }
-        Recipients::Passphrase(pw) => vec![argon::wrap(pw, &file_key)?],
-    };
+        Recipients::Passphrase(pw) => {
+            if !opts.argon.in_decrypt_range() {
+                return Err(Error::InvalidKey("argon2id parameters out of range"));
+            }
+            Ok(vec![argon::wrap(pw, file_key, opts.argon)?])
+        }
+    }
+}
+
+/// Encrypt `content` for `recipients`. Returns the binary `.sec` file.
+pub fn encrypt(
+    content: &[u8],
+    recipients: Recipients<'_>,
+    opts: &EncryptOptions<'_>,
+) -> Result<Vec<u8>> {
+    let file_key = Zeroizing::new(random::<32>()?);
+    let stanzas = build_stanzas(&file_key, recipients, opts)?;
     encrypt_with_stanzas(&file_key, &stanzas, content, opts)
 }
 
@@ -102,4 +130,108 @@ pub fn encrypt_with_stanzas(
     let payload = stream::encrypt(file_key, &nonce, &inner)?;
     out.extend_from_slice(&payload);
     Ok(out)
+}
+
+/// Flush full STREAM chunks from `buf`, leaving a partial chunk (or empty).
+fn flush_full_chunks(
+    enc: &mut StreamEncryptor,
+    buf: &mut Vec<u8>,
+    out: &mut dyn Write,
+) -> Result<()> {
+    while buf.len() >= CHUNK_SIZE {
+        let ct = enc.encrypt_chunk(&buf[..CHUNK_SIZE], false)?;
+        out.write_all(&ct)?;
+        buf.drain(..CHUNK_SIZE);
+    }
+    Ok(())
+}
+
+/// Encrypt plaintext from `reader` into a binary `.sec` file on `writer`.
+///
+/// Peak memory is one STREAM chunk plus Argon2 (when using a passphrase).
+/// The passphrase wrap runs before any content is read.
+pub fn encrypt_to(
+    reader: &mut dyn Read,
+    writer: &mut dyn Write,
+    recipients: Recipients<'_>,
+    opts: &EncryptOptions<'_>,
+) -> Result<()> {
+    let file_key = Zeroizing::new(random::<32>()?);
+    let stanzas = build_stanzas(&file_key, recipients, opts)?;
+    let (hdr, mac) = header::marshal(&stanzas, &file_key)?;
+    writer.write_all(&hdr)?;
+
+    let nonce = random::<{ stream::NONCE_LEN }>()?;
+    writer.write_all(&nonce)?;
+    let key = stream::payload_key(&file_key, &nonce);
+    let mut enc = StreamEncryptor::new(&key);
+
+    let signed = opts.signer.is_some();
+    let mut buf = Vec::with_capacity(CHUNK_SIZE);
+    buf.push(if signed {
+        inner::FLAG_SIGNED
+    } else {
+        inner::FLAG_UNSIGNED
+    });
+
+    let mut hasher = Sha512::new();
+    let mut content_len: u64 = 0;
+    let mut read_buf = [0u8; 8192];
+    loop {
+        let n = reader.read(&mut read_buf)?;
+        if n == 0 {
+            break;
+        }
+        hasher.update(&read_buf[..n]);
+        content_len = content_len
+            .checked_add(n as u64)
+            .ok_or(Error::Format("content too large"))?;
+        buf.extend_from_slice(&read_buf[..n]);
+        flush_full_chunks(&mut enc, &mut buf, writer)?;
+    }
+
+    let sigblock = match opts.signer {
+        Some(sk) => {
+            let hash: [u8; 64] = hasher.finalize().into();
+            let msg = signature_message_hashed(&mac, content_len, &hash);
+            Some(sk.sign(&msg)?)
+        }
+        None => {
+            let _ = hasher.finalize();
+            None
+        }
+    };
+
+    let l = inner::unpadded_len(content_len as usize, signed);
+    let k = if opts.pad {
+        padme::padding_len(l) as usize
+    } else {
+        0
+    };
+    buf.push(inner::TERMINATOR);
+    buf.resize(buf.len() + k, 0);
+    if let Some(sig) = &sigblock {
+        buf.extend_from_slice(&sig.to_bytes());
+    }
+
+    flush_full_chunks(&mut enc, &mut buf, writer)?;
+    if buf.is_empty() {
+        return Err(Error::Format("empty STREAM plaintext"));
+    }
+    let ct = enc.encrypt_chunk(&buf, true)?;
+    writer.write_all(&ct)?;
+    Ok(())
+}
+
+/// Encrypt from `reader` and write ASCII-armored ciphertext to `writer`.
+pub fn encrypt_armored_to(
+    reader: &mut dyn Read,
+    writer: &mut dyn Write,
+    recipients: Recipients<'_>,
+    opts: &EncryptOptions<'_>,
+) -> Result<()> {
+    let mut armor_out = armor::ArmorWriter::new(writer);
+    encrypt_to(reader, &mut armor_out, recipients, opts)?;
+    armor_out.finish()?;
+    Ok(())
 }

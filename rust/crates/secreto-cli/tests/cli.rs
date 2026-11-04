@@ -165,6 +165,53 @@ fn signing_and_verify() {
 }
 
 #[test]
+fn passphrase_memory_flag() {
+    let d = tmpdir("pwmem");
+    let out = d.join("out.sec");
+    let plain = d.join("plain.bin");
+    let pass = d.join("pass.txt");
+    fs::write(&plain, b"hello-pass").unwrap();
+    fs::write(&pass, b"test-pass\n").unwrap();
+
+    // --memory without -p
+    let (code, _, _) = run(SECRETO, &["-e", "-r", "secreto1qq", "--memory", "64"], None);
+    assert_eq!(code, 1);
+    // out of range
+    let (code, _, _) = run(SECRETO, &["-e", "-p", "--memory", "63"], None);
+    assert_eq!(code, 1);
+
+    // Default 64 MiB via SECRETO_PASSPHRASE_FD (shell redirects fd 3).
+    let status = Command::new("sh")
+        .arg("-c")
+        .arg(format!(
+            "SECRETO_PASSPHRASE_FD=3 '{}' -e -p -o '{}' '{}' 3< '{}'",
+            SECRETO,
+            out.display(),
+            plain.display(),
+            pass.display()
+        ))
+        .status()
+        .unwrap();
+    assert!(status.success());
+    let ct = fs::read(&out).unwrap();
+    let hdr = String::from_utf8_lossy(&ct);
+    assert!(hdr.contains(" 65536 3 4\n"), "{hdr}");
+
+    let o = Command::new("sh")
+        .arg("-c")
+        .arg(format!(
+            "SECRETO_PASSPHRASE_FD=3 '{}' -d -p '{}' 3< '{}'",
+            SECRETO,
+            out.display(),
+            pass.display()
+        ))
+        .output()
+        .unwrap();
+    assert_eq!(o.status.code(), Some(0), "{}", String::from_utf8_lossy(&o.stderr));
+    assert_eq!(o.stdout, b"hello-pass");
+}
+
+#[test]
 fn keygen_files_are_private_and_not_overwritten() {
     use std::os::unix::fs::PermissionsExt;
     let d = tmpdir("perm");

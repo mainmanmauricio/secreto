@@ -106,6 +106,47 @@ pub fn read_input(path: Option<&str>) -> Result<Zeroizing<Vec<u8>>> {
     Ok(buf)
 }
 
+/// Open stdin or the file at `path` for streaming reads.
+pub fn open_input(path: Option<&str>) -> Result<Box<dyn Read + '_>> {
+    if is_std(path) {
+        Ok(Box::new(io::stdin().lock()))
+    } else {
+        let p = path.expect("checked");
+        let f = File::open(p).map_err(|e| CliError::io(format!("{p}: {e}")))?;
+        Ok(Box::new(f))
+    }
+}
+
+/// Run `f` with a writer that is either stdout or a same-directory temp file.
+/// On success the temp file is fsynced and renamed into place.
+pub fn with_output<F>(out: Option<&str>, f: F) -> Result<()>
+where
+    F: FnOnce(&mut dyn Write) -> Result<()>,
+{
+    if is_std(out) {
+        let mut stdout = io::stdout().lock();
+        f(&mut stdout)?;
+        stdout
+            .flush()
+            .map_err(|e| CliError::io(format!("writing stdout: {e}")))
+    } else {
+        let target = Path::new(out.expect("checked"));
+        let (mut file, tmp) = create_temp(target)?;
+        let mut guard = TempGuard {
+            path: tmp,
+            armed: true,
+        };
+        let name = target.display().to_string();
+        f(&mut file)?;
+        file.sync_all()
+            .map_err(|e| CliError::io(format!("{name}: {e}")))?;
+        drop(file);
+        fs::rename(&guard.path, target).map_err(|e| CliError::io(format!("{name}: {e}")))?;
+        guard.armed = false;
+        Ok(())
+    }
+}
+
 /// Read a UTF-8 text file (recipients, identities, keys).
 pub fn read_text_file(path: &Path) -> Result<Zeroizing<String>> {
     let name = path.display().to_string();

@@ -47,7 +47,7 @@ matching) or reject the file when the type is required and missing.
 
 | Parameter | Value |
 |-----------|-------|
-| m (KiB) | 1048576 |
+| m (KiB) | 65536 (default; encryptors MAY choose any value in the decrypt range) |
 | t | 3 |
 | p | 4 |
 | output length | 32 |

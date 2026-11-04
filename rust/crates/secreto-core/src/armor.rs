@@ -5,12 +5,93 @@
 
 use crate::error::{Error, Result};
 use base64::{engine::general_purpose::STANDARD, Engine};
+use std::io::Write;
 
 /// PEM label.
 pub const LABEL: &str = "SECRETO ENCRYPTED FILE";
 const BEGIN: &str = "-----BEGIN SECRETO ENCRYPTED FILE-----";
 const END: &str = "-----END SECRETO ENCRYPTED FILE-----";
 const COLS: usize = 64;
+
+/// Streaming PEM writer: buffers raw bytes, emits Base64 lines of 64 columns.
+pub struct ArmorWriter<'a> {
+    inner: &'a mut dyn Write,
+    pending: Vec<u8>,
+    started: bool,
+    finished: bool,
+}
+
+impl<'a> ArmorWriter<'a> {
+    /// Create a writer; the BEGIN line is emitted on the first write.
+    pub fn new(inner: &'a mut dyn Write) -> Self {
+        Self {
+            inner,
+            pending: Vec::with_capacity(COLS * 3 / 4 + 3),
+            started: false,
+            finished: false,
+        }
+    }
+
+    fn emit_begin(&mut self) -> Result<()> {
+        if !self.started {
+            self.inner.write_all(BEGIN.as_bytes())?;
+            self.inner.write_all(b"\n")?;
+            self.started = true;
+        }
+        Ok(())
+    }
+
+    fn flush_full_lines(&mut self) -> Result<()> {
+        // Every 3 raw bytes become 4 Base64 chars; emit 16 groups (= 64 chars).
+        while self.pending.len() >= 48 {
+            let chunk = &self.pending[..48];
+            let line = STANDARD.encode(chunk);
+            debug_assert_eq!(line.len(), COLS);
+            self.inner.write_all(line.as_bytes())?;
+            self.inner.write_all(b"\n")?;
+            self.pending.drain(..48);
+        }
+        Ok(())
+    }
+
+    /// Write the END line and any remaining Base64. Must be called once.
+    pub fn finish(mut self) -> Result<()> {
+        if self.finished {
+            return Ok(());
+        }
+        self.emit_begin()?;
+        if !self.pending.is_empty() {
+            let line = STANDARD.encode(&self.pending);
+            self.inner.write_all(line.as_bytes())?;
+            self.inner.write_all(b"\n")?;
+            self.pending.clear();
+        } else if !self.started {
+            // empty body is invalid for our format, but finish still closes.
+        }
+        self.inner.write_all(END.as_bytes())?;
+        self.inner.write_all(b"\n")?;
+        self.finished = true;
+        Ok(())
+    }
+}
+
+impl Write for ArmorWriter<'_> {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        if self.finished {
+            return Err(std::io::Error::other("armor writer already finished"));
+        }
+        self.emit_begin()
+            .map_err(|e| std::io::Error::other(e.to_string()))?;
+        self.pending.extend_from_slice(buf);
+        self.flush_full_lines()
+            .map_err(|e| std::io::Error::other(e.to_string()))?;
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.inner.flush()
+    }
+}
 
 /// Encode `data` as a PEM block (LF line endings, trailing LF).
 pub fn encode(data: &[u8]) -> String {

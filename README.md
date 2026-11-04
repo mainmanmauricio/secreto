@@ -14,7 +14,7 @@ interoperate byte-for-byte on `secreto/v1`.
 | Role | Algorithm |
 |------|-----------|
 | Key exchange | MLKEM1024-P384 (hybrid PQ/T HPKE KEM `0x0051`) |
-| Passphrase | Argon2id (`m=1 GiB`, `t=3`, `p=4` on encrypt) |
+| Passphrase | Argon2id (`m=64 MiB` default, `t=3`, `p=4`; `--memory` up to 4 GiB) |
 | Payload AEAD | ChaCha20-Poly1305 (256-bit file key, STREAM 64 KiB chunks) |
 | KDF / MAC | HKDF-SHA-512 / HMAC-SHA-512 |
 | Signatures (optional) | Ed25519 + ML-DSA-87 hybrid |
@@ -86,7 +86,9 @@ secreto -d -i key.txt --verify "$(cat signer.pub)" -o message.out secret.asc
 ```
 
 Passphrases: `-p` (read from `/dev/tty`, or from
-`SECRETO_PASSPHRASE_FD`). Encrypt uses Argon2id with 1 GiB memory.
+`SECRETO_PASSPHRASE_FD`). Encrypt uses Argon2id with 64 MiB memory by
+default; `--memory MIB` (64–4096) raises the cost (e.g. `--memory 1024`
+for 1 GiB).
 
 Exit codes: `0` ok, `1` usage/key, `2` I/O, `3` no match, `4` format/auth,
 `5` signature.
@@ -108,8 +110,9 @@ Individual targets: `make test`, `make vectors-check`, `make interop`,
 - Forward secrecy covers the sender side only (fresh ephemeral per stanza).
 - Decrypting a signed file without `--verify` still releases plaintext and
   prints a warning naming the signer ID.
-- Passphrase encryption intentionally costs ~1 GiB RAM; decryption accepts
-  a bounded parameter range to resist DoS while rejecting weak files.
+- Passphrase encryption defaults to 64 MiB of Argon2id RAM (`--memory`
+  raises it); decryption accepts a bounded parameter range to resist DoS
+  while rejecting weak files. Payload encryption streams in 64 KiB chunks.
 
 ## License
 

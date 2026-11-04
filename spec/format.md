@@ -226,7 +226,10 @@ oracle mitigation).
 - `m_kib`, `t`, `p` are canonical decimal integers (no leading zeros;
   regex `^[1-9][0-9]*$`).
 
-Encryption MUST use `m_kib=1048576`, `t=3`, `p=4`.
+Encryption MUST use `t=3`, `p=4`, and an `m_kib` inside the decryption
+acceptance range `[65536, 4194304]`. The default is `m_kib=65536`
+(64 MiB). Implementations MAY expose a way to choose a higher `m_kib`
+within that range (for example `1048576` for 1 GiB).
 
 ```
 wrap_key = Argon2id(

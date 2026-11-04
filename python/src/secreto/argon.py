@@ -19,7 +19,7 @@ TYPE = "argon2id"
 SALT_LABEL = b"secreto/v1/argon2id"
 SALT_LEN = 16
 BODY_LEN = 48
-DEFAULT_M, DEFAULT_T, DEFAULT_P = 1048576, 3, 4
+DEFAULT_M, DEFAULT_T, DEFAULT_P = 65536, 3, 4
 M_RANGE = (65536, 4194304)
 T_RANGE = (3, 16)
 P_RANGE = (1, 16)
@@ -51,13 +51,19 @@ def wrap_key(passphrase: bytes, salt: bytes, m_kib: int, t: int, p: int) -> byte
     return argon2id_raw(passphrase, SALT_LABEL + salt, m_kib, t, p, 32)
 
 
-def wrap(passphrase: bytes, file_key: bytes) -> Stanza:
+def wrap(
+    passphrase: bytes,
+    file_key: bytes,
+    m_kib: int = DEFAULT_M,
+    t: int = DEFAULT_T,
+    p: int = DEFAULT_P,
+) -> Stanza:
+    if not (M_RANGE[0] <= m_kib <= M_RANGE[1] and T_RANGE[0] <= t <= T_RANGE[1] and P_RANGE[0] <= p <= P_RANGE[1]):
+        raise FormatError("argon2id parameters out of range")
     salt = os.urandom(SALT_LEN)
-    key = wrap_key(passphrase, salt, DEFAULT_M, DEFAULT_T, DEFAULT_P)
+    key = wrap_key(passphrase, salt, m_kib, t, p)
     body = ChaCha20Poly1305(key).encrypt(b"\x00" * 12, file_key, None)
-    return Stanza(
-        [TYPE, b64_encode(salt), str(DEFAULT_M), str(DEFAULT_T), str(DEFAULT_P)], body
-    )
+    return Stanza([TYPE, b64_encode(salt), str(m_kib), str(t), str(p)], body)
 
 
 def _param(text: str, lo: int, hi: int) -> int:

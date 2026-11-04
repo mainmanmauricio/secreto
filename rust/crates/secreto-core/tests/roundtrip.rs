@@ -7,8 +7,8 @@ use secreto_core::argon::{self, ArgonParams};
 use secreto_core::encrypt::{encrypt_with_stanzas, mlkem_stanza};
 use secreto_core::header::{self, Stanza};
 use secreto_core::{
-    armor, decrypt, encrypt, encrypt_armored, inner, padme, stream, DecryptOptions, EncryptOptions,
-    Error, Identity, Recipients, SigningKey,
+    armor, decrypt, decrypt_to, encrypt, encrypt_armored, encrypt_to, inner, padme, stream,
+    DecryptOptions, EncryptOptions, Error, Identity, Recipients, SigningKey,
 };
 
 fn data(n: usize) -> Vec<u8> {
@@ -320,7 +320,88 @@ fn passphrase_roundtrip_and_rules() {
 }
 
 #[test]
-#[ignore = "uses the mandated 1 GiB Argon2id parameters; run with --release -- --ignored"]
+fn streaming_matches_in_memory() {
+    use std::io::Cursor;
+    let id = Identity::generate().unwrap();
+    let ids = [id];
+    let r = [ids[0].recipient().unwrap()];
+    let sk = SigningKey::generate().unwrap();
+    for (pad, sign, n) in [
+        (false, false, 0usize),
+        (false, false, 100),
+        (true, false, 1000),
+        (false, true, 70_000),
+        (true, true, 100),
+    ] {
+        let pt = data(n);
+        let opts = EncryptOptions {
+            pad,
+            signer: sign.then_some(&sk),
+            ..Default::default()
+        };
+        let mem = encrypt(&pt, Recipients::Keys(&r), &opts).unwrap();
+        let mut out = Vec::new();
+        encrypt_to(
+            &mut Cursor::new(&pt),
+            &mut out,
+            Recipients::Keys(&r),
+            &opts,
+        )
+        .unwrap();
+        // Nonces and ephemeral keys differ; compare via decrypt.
+        let a = decrypt(&mem, &opts_ids(&ids, sign.then_some(&sk.public_key()))).unwrap();
+        let b = decrypt(&out, &opts_ids(&ids, sign.then_some(&sk.public_key()))).unwrap();
+        assert_eq!(&a.content[..], &pt[..], "pad={pad} sign={sign} n={n}");
+        assert_eq!(&b.content[..], &pt[..], "pad={pad} sign={sign} n={n}");
+
+        let mut recovered = Vec::new();
+        let meta = decrypt_to(
+            &mut Cursor::new(&out),
+            &mut recovered,
+            &opts_ids(&ids, sign.then_some(&sk.public_key())),
+        )
+        .unwrap();
+        assert_eq!(recovered, pt);
+        assert_eq!(meta.verified, sign);
+    }
+
+    // Passphrase streaming at default 64 MiB.
+    let opts = EncryptOptions::default();
+    let mut out = Vec::new();
+    encrypt_to(
+        &mut Cursor::new(b"stream-pw"),
+        &mut out,
+        Recipients::Passphrase(b"pw"),
+        &opts,
+    )
+    .unwrap();
+    let (h, _) = header::parse(&out).unwrap();
+    assert_eq!(&h.stanzas[0].args[2..], &["65536", "3", "4"]);
+    let mut recovered = Vec::new();
+    decrypt_to(
+        &mut Cursor::new(&out),
+        &mut recovered,
+        &DecryptOptions {
+            passphrase: Some(b"pw"),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    assert_eq!(recovered, b"stream-pw");
+}
+
+fn opts_ids<'a>(
+    ids: &'a [Identity],
+    verify: Option<&'a secreto_core::SignerPublicKey>,
+) -> DecryptOptions<'a> {
+    DecryptOptions {
+        identities: ids,
+        verify,
+        ..Default::default()
+    }
+}
+
+#[test]
 fn passphrase_default_parameters() {
     let ct = encrypt(
         b"hello",
@@ -329,7 +410,7 @@ fn passphrase_default_parameters() {
     )
     .unwrap();
     let (h, _) = header::parse(&ct).unwrap();
-    assert_eq!(&h.stanzas[0].args[2..], &["1048576", "3", "4"]);
+    assert_eq!(&h.stanzas[0].args[2..], &["65536", "3", "4"]);
     let out = decrypt(
         &ct,
         &DecryptOptions {
@@ -339,6 +420,22 @@ fn passphrase_default_parameters() {
     )
     .unwrap();
     assert_eq!(&out.content[..], b"hello");
+}
+
+#[test]
+#[ignore = "uses 1 GiB Argon2id; run with --release -- --ignored"]
+fn passphrase_high_memory_parameters() {
+    let opts = EncryptOptions {
+        argon: argon::ArgonParams {
+            m_kib: 1_048_576,
+            t: 3,
+            p: 4,
+        },
+        ..Default::default()
+    };
+    let ct = encrypt(b"hello", Recipients::Passphrase(b"pw"), &opts).unwrap();
+    let (h, _) = header::parse(&ct).unwrap();
+    assert_eq!(&h.stanzas[0].args[2..], &["1048576", "3", "4"]);
 }
 
 #[test]
@@ -359,6 +456,7 @@ fn signing_and_verification() {
                 &EncryptOptions {
                     pad,
                     signer: Some(&sk),
+                    ..Default::default()
                 },
             )
             .unwrap();
@@ -425,6 +523,7 @@ fn signature_is_bound_to_header_mac() {
         &EncryptOptions {
             pad: false,
             signer: Some(&sk),
+            ..Default::default()
         },
     )
     .unwrap();

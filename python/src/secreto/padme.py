@@ -13,3 +13,8 @@ def padme(length: int) -> int:
     s = (e.bit_length() - 1) // 2 if e >= 1 else 0
     mask = (1 << (e - s)) - 1
     return (length + mask) & ~mask
+
+
+def padding_len(length: int) -> int:
+    """Number of zero bytes to insert for unpadded inner length ``length``."""
+    return padme(length) - length

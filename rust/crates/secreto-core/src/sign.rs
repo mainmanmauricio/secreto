@@ -46,15 +46,25 @@ pub fn signer_id(pk_bytes: &[u8; PK_LEN]) -> [u8; SIGNER_ID_LEN] {
     out
 }
 
-/// The signed message:
-/// `"secreto/v1/signature" || header_mac (64) || content_len (u64 BE) || SHA-512(content)`.
-pub fn signature_message(header_mac: &[u8; 64], content: &[u8]) -> Vec<u8> {
+/// The signed message from a precomputed content digest (streaming encrypt).
+pub fn signature_message_hashed(
+    header_mac: &[u8; 64],
+    content_len: u64,
+    content_hash: &[u8; 64],
+) -> Vec<u8> {
     let mut m = Vec::with_capacity(MSG_LABEL.len() + 64 + 8 + 64);
     m.extend_from_slice(MSG_LABEL);
     m.extend_from_slice(header_mac);
-    m.extend_from_slice(&(content.len() as u64).to_be_bytes());
-    m.extend_from_slice(&Sha512::digest(content));
+    m.extend_from_slice(&content_len.to_be_bytes());
+    m.extend_from_slice(content_hash);
     m
+}
+
+/// The signed message:
+/// `"secreto/v1/signature" || header_mac (64) || content_len (u64 BE) || SHA-512(content)`.
+pub fn signature_message(header_mac: &[u8; 64], content: &[u8]) -> Vec<u8> {
+    let hash: [u8; 64] = Sha512::digest(content).into();
+    signature_message_hashed(header_mac, content.len() as u64, &hash)
 }
 
 /// Signer public key (`ed25519_pk || mldsa87_pk`, 2624 bytes).

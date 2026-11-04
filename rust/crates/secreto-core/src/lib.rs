@@ -38,8 +38,10 @@ pub mod padme;
 pub mod sign;
 pub mod stream;
 
-pub use decrypt::{decrypt, DecryptOptions, Decrypted};
-pub use encrypt::{encrypt, encrypt_armored, EncryptOptions, Recipients};
+pub use decrypt::{decrypt, decrypt_to, DecryptMeta, DecryptOptions, Decrypted};
+pub use encrypt::{
+    encrypt, encrypt_armored, encrypt_armored_to, encrypt_to, EncryptOptions, Recipients,
+};
 pub use error::{Error, Result};
 pub use keys::{Identity, Recipient};
 pub use sign::{SigBlock, SignerPublicKey, SigningKey};

@@ -5,6 +5,7 @@
 #pragma once
 
 #include <array>
+#include <cstdio>
 #include <optional>
 #include <vector>
 
@@ -12,7 +13,7 @@
 
 namespace secreto {
 
-inline constexpr std::uint32_t kArgonDefaultM = 1048576;
+inline constexpr std::uint32_t kArgonDefaultM = 65536;  // 64 MiB
 inline constexpr std::uint32_t kArgonDefaultT = 3;
 inline constexpr std::uint32_t kArgonDefaultP = 4;
 inline constexpr std::size_t kFileKeyLen = 32;
@@ -26,7 +27,7 @@ struct ArgonParams {
 struct EncryptOptions {
   std::vector<Bytes> recipients;           // 1665-byte encapsulation keys
   std::optional<SecretBytes> passphrase;   // mutually exclusive with recipients
-  ArgonParams argon;                       // spec mandates the defaults; tests may lower them
+  ArgonParams argon;                       // default 64 MiB; CLI --memory may raise it
   bool pad = false;                        // Padme length padding
   std::optional<SecretBytes> signing_key;  // 64-byte signing secret
   bool armor = false;
@@ -35,6 +36,11 @@ struct EncryptOptions {
 // Returns the complete file (binary, or armored if requested).
 // Throws Error (kExitUsage for bad options, kExitIo for resource failures).
 Bytes encrypt(ByteView content, const EncryptOptions& opts);
+
+// Stream plaintext from `in` to a binary `.sec` on `out`. Passphrase wrap
+// (Argon2) runs before any content is read. `opts.armor` is ignored (caller
+// wraps with armor if needed).
+void encrypt_to(std::FILE* in, std::FILE* out, const EncryptOptions& opts);
 
 struct DecryptOptions {
   std::vector<SecretBytes> identities;    // 32-byte KEM seeds

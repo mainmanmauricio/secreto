@@ -1,9 +1,13 @@
 // SPDX-FileCopyrightText: 2026 secreto contributors
 // SPDX-License-Identifier: EUPL-1.2
 
+#include <fcntl.h>
 #include <getopt.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 #include <cstdio>
+#include <cstdlib>
 #include <new>
 #include <string>
 #include <vector>
@@ -24,10 +28,11 @@ void usage(std::FILE* f) {
   std::fputs(
       "usage:\n"
       "  secreto [-e] (-r RECIPIENT | -R FILE)... [--sign KEYFILE] [--pad] [-a] [-o OUT] [IN]\n"
-      "  secreto [-e] -p [--sign KEYFILE] [--pad] [-a] [-o OUT] [IN]\n"
+      "  secreto [-e] -p [--memory MIB] [--sign KEYFILE] [--pad] [-a] [-o OUT] [IN]\n"
       "  secreto -d (-i FILE)... | -p [--verify SIGNER_PUB] [-o OUT] [IN]\n"
       "\n"
-      "The passphrase is read from SECRETO_PASSPHRASE_FD or /dev/tty.\n",
+      "The passphrase is read from SECRETO_PASSPHRASE_FD or /dev/tty.\n"
+      "--memory sets Argon2id memory in MiB (default 64; range 64-4096; -p only).\n",
       f);
 }
 
@@ -40,6 +45,8 @@ struct Options {
   bool armor = false;
   bool pad = false;
   bool help = false;
+  bool have_memory = false;
+  std::uint32_t memory_mib = 64;
   std::vector<std::string> recipients;
   std::vector<std::string> recipient_files;
   std::vector<std::string> identity_files;
@@ -54,6 +61,7 @@ Options parse_args(int argc, char** argv) {
   static const option longopts[] = {{"pad", no_argument, nullptr, 'P'},
                                     {"sign", required_argument, nullptr, 'S'},
                                     {"verify", required_argument, nullptr, 'V'},
+                                    {"memory", required_argument, nullptr, 'M'},
                                     {"help", no_argument, nullptr, 'h'},
                                     {nullptr, 0, nullptr, 0}};
   Options o;
@@ -71,6 +79,16 @@ Options parse_args(int argc, char** argv) {
       case 'a': o.armor = true; break;
       case 'o': o.output = optarg; o.have_output = true; break;
       case 'P': o.pad = true; break;
+      case 'M': {
+        if (o.have_memory) usage_error("--memory given more than once");
+        char* end = nullptr;
+        unsigned long v = std::strtoul(optarg, &end, 10);
+        if (end == optarg || *end != '\0' || v < 64 || v > 4096)
+          usage_error("--memory must be an integer between 64 and 4096 (MiB)");
+        o.memory_mib = static_cast<std::uint32_t>(v);
+        o.have_memory = true;
+        break;
+      }
       case 'S':
         if (!o.sign_file.empty()) usage_error("--sign given more than once");
         o.sign_file = optarg;
@@ -120,10 +138,14 @@ int run(int argc, char** argv) {
       usage_error("-i and --verify are only valid when decrypting");
     if (!have_recipients && !o.passphrase) usage_error("encryption needs -r/-R or -p");
     if (o.passphrase && have_recipients) usage_error("-p cannot be combined with -r/-R");
+    if (o.have_memory && !o.passphrase) usage_error("--memory requires -p");
 
     EncryptOptions eo;
     eo.pad = o.pad;
     eo.armor = o.armor;
+    eo.argon.m_kib = o.memory_mib * 1024u;
+    eo.argon.t = kArgonDefaultT;
+    eo.argon.p = kArgonDefaultP;
     for (const std::string& r : o.recipients) eo.recipients.push_back(keys::recipient_from_bech32(r));
     for (const std::string& f : o.recipient_files) {
       SecretBytes text = io::read_file(f);
@@ -139,20 +161,76 @@ int run(int argc, char** argv) {
         usage_error("refusing to write binary ciphertext to a terminal (use -a or -o)");
     }
 
-    SecretBytes content = io::read_input(input);
     if (o.passphrase) {
       eo.passphrase = io::read_passphrase(true);
       if (eo.passphrase->empty()) usage_error("empty passphrase");
     }
-    Bytes out = encrypt(content, eo);
-    io::write_output(o.output, out);
+    if (eo.armor) {
+      // Armored output uses the in-memory path (Rust/Python stream PEM).
+      SecretBytes content = io::read_input(input);
+      Bytes out = encrypt(content, eo);
+      io::write_output(o.output, out);
+      return kExitOk;
+    }
+
+    std::FILE* in = nullptr;
+    bool close_in = false;
+    if (input.empty() || input == "-") {
+      in = stdin;
+    } else {
+      in = std::fopen(input.c_str(), "rb");
+      if (!in) fail(kExitIo, "cannot open " + input);
+      close_in = true;
+    }
+
+    const bool to_stdout = !o.have_output || o.output == "-";
+    try {
+      if (to_stdout) {
+        encrypt_to(in, stdout, eo);
+      } else {
+        std::string out_path = o.output;
+        std::string dir = ".";
+        auto slash = out_path.rfind('/');
+        if (slash != std::string::npos) dir = out_path.substr(0, slash == 0 ? 1 : slash);
+        std::string tmpl = dir + "/.secreto-out-XXXXXX";
+        std::vector<char> tbuf(tmpl.begin(), tmpl.end());
+        tbuf.push_back('\0');
+        int tfd = ::mkstemp(tbuf.data());
+        if (tfd < 0) fail(kExitIo, "cannot create temp output");
+        ::fchmod(tfd, 0600);
+        std::FILE* outf = ::fdopen(tfd, "wb");
+        if (!outf) {
+          ::close(tfd);
+          ::unlink(tbuf.data());
+          fail(kExitIo, "cannot open temp output");
+        }
+        try {
+          encrypt_to(in, outf, eo);
+          if (std::fflush(outf) != 0) fail(kExitIo, "flush failed");
+          std::fclose(outf);
+          outf = nullptr;
+          if (::rename(tbuf.data(), out_path.c_str()) != 0) {
+            ::unlink(tbuf.data());
+            fail(kExitIo, "cannot rename output");
+          }
+        } catch (...) {
+          if (outf) std::fclose(outf);
+          ::unlink(tbuf.data());
+          throw;
+        }
+      }
+    } catch (...) {
+      if (close_in) std::fclose(in);
+      throw;
+    }
+    if (close_in) std::fclose(in);
     return kExitOk;
   }
 
   // ------------------------------------------------------------- decrypt
   if (!o.recipients.empty() || !o.recipient_files.empty() || o.pad || o.armor ||
-      !o.sign_file.empty())
-    usage_error("-r, -R, -a, --pad and --sign are only valid when encrypting");
+      !o.sign_file.empty() || o.have_memory)
+    usage_error("-r, -R, -a, --pad, --sign and --memory are only valid when encrypting");
   if (o.identity_files.empty() && !o.passphrase) usage_error("decryption needs -i or -p");
 
   DecryptOptions dopts;

@@ -11,7 +11,7 @@ Implementations MUST provide two programs: `secreto` and `secreto-keygen`.
 
 ```
 secreto [-e] (-r RECIPIENT | -R FILE)... [--sign KEYFILE] [--pad] [-a] [-o OUT] [IN]
-secreto [-e] -p [--sign KEYFILE] [--pad] [-a] [-o OUT] [IN]
+secreto [-e] -p [--memory MIB] [--sign KEYFILE] [--pad] [-a] [-o OUT] [IN]
 secreto -d (-i FILE)... | -p [--verify SIGNER_PUB] [-o OUT] [IN]
 secreto-keygen [-o OUT]
 secreto-keygen -y [IN]
@@ -34,6 +34,7 @@ present; otherwise usage error.
 | `-R FILE` | Read recipients from file (one per line; `#` comments) |
 | `-i FILE` | Decrypt with identity file (repeatable) |
 | `-p` | Passphrase mode |
+| `--memory MIB` | Argon2id memory cost in MiB (encrypt + `-p` only; default 64; range 64–4096) |
 | `-a` | ASCII armor output (encrypt only) |
 | `-o OUT` | Output path |
 | `--pad` | Apply Padmé length padding (encrypt only) |
@@ -42,6 +43,9 @@ present; otherwise usage error.
 
 Encrypt MUST receive at least one of: one or more `-r`/`-R`, or `-p`.
 `-p` MUST NOT be combined with `-r`/`-R`.
+`--memory` MUST NOT be used without `-p`, and `MIB` MUST be an integer in
+`[64, 4096]`; otherwise exit 1. The stanza records `m_kib = MIB * 1024`
+with fixed `t=3`, `p=4`.
 
 Decrypt MUST receive at least one `-i` or `-p`.
 

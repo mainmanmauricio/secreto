@@ -23,8 +23,8 @@ pub const KEY_LEN: usize = 32;
 /// Prefix of the Argon2 salt.
 pub const SALT_PREFIX: &[u8] = b"secreto/v1/argon2id";
 
-/// Encryption default memory cost (KiB).
-pub const DEFAULT_M_KIB: u32 = 1_048_576;
+/// Encryption default memory cost (KiB). RFC 9106 constrained profile (64 MiB).
+pub const DEFAULT_M_KIB: u32 = 65_536;
 /// Encryption default time cost.
 pub const DEFAULT_T: u32 = 3;
 /// Encryption default parallelism.
@@ -96,8 +96,16 @@ pub fn argon2id_raw(
         Argon2::new_with_secret(secret, Algorithm::Argon2id, Version::V0x13, p).map_err(|_| E)?
     };
     let mut out = Zeroizing::new(vec![0u8; tag_len]);
-    a.hash_password_into(password, salt, &mut out)
-        .map_err(|_| E)?;
+    a.hash_password_into(password, salt, &mut out).map_err(|e| {
+        if matches!(e, argon2::Error::OutOfMemory) {
+            Error::Io(format!(
+                "insufficient memory for Argon2id (need {} MiB)",
+                params.m_kib / 1024
+            ))
+        } else {
+            E
+        }
+    })?;
     Ok(out)
 }
 
@@ -146,12 +154,15 @@ pub fn wrap_with(
     })
 }
 
-/// Wrap `file_key` with a fresh salt and the mandated parameters
-/// (`m=1 GiB, t=3, p=4`).
-pub fn wrap(passphrase: &[u8], file_key: &[u8; 32]) -> Result<Stanza> {
+/// Wrap `file_key` with a fresh salt and `params` (defaults: 64 MiB, t=3, p=4).
+pub fn wrap(
+    passphrase: &[u8],
+    file_key: &[u8; 32],
+    params: ArgonParams,
+) -> Result<Stanza> {
     let mut salt = [0u8; SALT_LEN];
     getrandom::fill(&mut salt).map_err(|_| Error::Io("random number generator failure".into()))?;
-    wrap_with(passphrase, file_key, &salt, ArgonParams::DEFAULT)
+    wrap_with(passphrase, file_key, &salt, params)
 }
 
 /// Parse a canonical decimal integer (`^[1-9][0-9]*$`) fitting in `u32`.
@@ -323,7 +334,7 @@ mod tests {
         assert_eq!(
             ArgonParams::DEFAULT,
             ArgonParams {
-                m_kib: 1_048_576,
+                m_kib: 65_536,
                 t: 3,
                 p: 4
             }

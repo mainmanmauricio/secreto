@@ -259,19 +259,30 @@ static void test_usage_and_io_errors() {
   CHECK(slurp(P("w.err").string()).find("warning") != std::string::npos);
 }
 
-// Full-strength passphrase encryption (1 GiB Argon2id); opt-in because of memory use.
-static void test_passphrase_full() {
-  if (std::getenv("SECRETO_TEST_FULL_ARGON") == nullptr) return;
+// Default passphrase encryption (64 MiB Argon2id).
+static void test_passphrase_default() {
+  const std::string quiet = "2>/dev/null >/dev/null </dev/null";
   std::string plain = make_plain(1000);
   write_file(P("pp.bin"), plain);
   write_file(P("pass.txt"), "correct horse\r\n");
   CHECK(sh("SECRETO_PASSPHRASE_FD=3 '" + g_secreto + "' -e -p -o " + q(P("pp.sec")) + " " +
            q(P("pp.bin")) + " 3< " + q(P("pass.txt"))) == 0);
   std::string c = slurp(P("pp.sec").string());
-  CHECK(c.find("-> argon2id ") != std::string::npos && c.find(" 1048576 3 4\n") != std::string::npos);
+  CHECK(c.find("-> argon2id ") != std::string::npos && c.find(" 65536 3 4\n") != std::string::npos);
   CHECK(sh("SECRETO_PASSPHRASE_FD=3 '" + g_secreto + "' -d -p -o " + q(P("pp.out")) + " " +
            q(P("pp.sec")) + " 3< " + q(P("pass.txt"))) == 0);
   CHECK(slurp(P("pp.out").string()) == plain);
+
+  // --memory 1024 restores the historical 1 GiB cost (opt-in: needs ~1 GiB RAM).
+  if (std::getenv("SECRETO_TEST_FULL_ARGON") != nullptr) {
+    CHECK(sh("SECRETO_PASSPHRASE_FD=3 '" + g_secreto + "' -e -p --memory 1024 -o " +
+             q(P("pp1g.sec")) + " " + q(P("pp.bin")) + " 3< " + q(P("pass.txt"))) == 0);
+    std::string c1 = slurp(P("pp1g.sec").string());
+    CHECK(c1.find(" 1048576 3 4\n") != std::string::npos);
+  }
+  CHECK(sh("SECRETO_PASSPHRASE_FD=3 '" + g_secreto + "' -e -p --memory 63 " + quiet) == 1);
+  CHECK(sh("SECRETO_PASSPHRASE_FD=3 '" + g_secreto + "' -e -r secreto1qq " +
+           "--memory 64 " + quiet) == 1);  // --memory without -p
 }
 
 int main(int argc, char** argv) {
@@ -296,7 +307,7 @@ int main(int argc, char** argv) {
     test_encrypt_decrypt();
     test_signing();
     test_usage_and_io_errors();
-    test_passphrase_full();
+    test_passphrase_default();
   } catch (const std::exception& e) {
     std::fprintf(stderr, "exception: %s\n", e.what());
     fs::remove_all(g_dir);

@@ -5,6 +5,7 @@
 #pragma once
 
 #include <array>
+#include <cstdint>
 
 #include "secreto/common.hpp"
 
@@ -30,8 +31,15 @@ std::array<std::uint8_t, kSignerIdLen> signer_id(ByteView public_key);
 // msg = "secreto/v1/signature" || header_mac || u64be(len) || SHA-512(content)
 Bytes signature_message(ByteView header_mac, ByteView content);
 
+// Same as signature_message with a precomputed SHA-512(content).
+Bytes signature_message_hashed(ByteView header_mac, std::uint64_t content_len,
+                               ByteView content_hash);
+
 // signer_id || ed25519_sig || mldsa87_sig
 Bytes sign(ByteView secret_key, ByteView header_mac, ByteView content);
+
+// Sign an already-built message (streaming encrypt).
+Bytes sign_msg(ByteView secret_key, ByteView msg);
 
 // Verifies a sigblock against `public_key`. Throws Error(kExitSignature).
 void verify(ByteView public_key, ByteView sigblock, ByteView header_mac, ByteView content);

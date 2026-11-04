@@ -37,12 +37,13 @@ def signer_id(pk_bytes: bytes) -> bytes:
     return hashlib.sha512(_ID_LABEL + pk_bytes).digest()[:SIGNER_ID_LEN]
 
 
+def signature_message_hashed(header_mac: bytes, content_len: int, content_hash: bytes) -> bytes:
+    return _MSG_LABEL + header_mac + struct.pack(">Q", content_len) + content_hash
+
+
 def signature_message(header_mac: bytes, content: bytes) -> bytes:
-    return (
-        _MSG_LABEL
-        + header_mac
-        + struct.pack(">Q", len(content))
-        + hashlib.sha512(content).digest()
+    return signature_message_hashed(
+        header_mac, len(content), hashlib.sha512(content).digest()
     )
 
 
@@ -109,10 +110,13 @@ class SigningKey:
         ed_pk = self._ed.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw)
         return SignerPublicKey(ed_pk + self._ml.public_key().public_bytes_raw())
 
-    def sign(self, header_mac: bytes, content: bytes) -> bytes:
-        """Return the 4723-byte signature block over ``content``."""
-        msg = signature_message(header_mac, content)
+    def sign_msg(self, msg: bytes) -> bytes:
+        """Return the 4723-byte signature block over an already-built message."""
         pk = self.public_key()
         block = pk.signer_id + self._ed.sign(msg) + self._ml.sign(msg, b"")
         assert len(block) == SIGBLOCK_LEN
         return block
+
+    def sign(self, header_mac: bytes, content: bytes) -> bytes:
+        """Return the 4723-byte signature block over ``content``."""
+        return self.sign_msg(signature_message(header_mac, content))
