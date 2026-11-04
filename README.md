@@ -52,6 +52,24 @@ Binaries:
 | Python | `python/.venv/bin/secreto` | `python/.venv/bin/secreto-keygen` |
 | C++ | `cpp/build/secreto` | `cpp/build/secreto-keygen` |
 
+## Packages (Linux)
+
+Build and install the Rust CLI as a system package (needs `cargo-deb` /
+`cargo-generate-rpm`, plus `sudo`):
+
+```bash
+make package-deb          # → rust/target/debian/secreto_*.deb
+make package-rpm          # → rust/target/generate-rpm/secreto-*.rpm
+make install-deb          # build + dpkg -i
+make install-rpm          # build + dnf/yum/zypper/rpm -Uvh
+make uninstall-deb
+make uninstall-rpm
+make reinstall-deb
+make reinstall-rpm
+```
+
+`make install` / `uninstall` / `reinstall` pick `.deb` or `.rpm` from the host.
+
 ## Usage
 
 ```bash

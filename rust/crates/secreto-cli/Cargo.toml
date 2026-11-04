@@ -9,6 +9,40 @@ license.workspace = true
 authors.workspace = true
 rust-version.workspace = true
 description = "Command-line tools `secreto` and `secreto-keygen`"
+readme = "../../../README.md"
+repository = "https://github.com/mainmanmauricio/secreto"
+homepage = "https://github.com/mainmanmauricio/secreto"
+
+[package.metadata.deb]
+name = "secreto"
+maintainer = "secreto contributors <567431+mainmanmauricio@users.noreply.github.com>"
+copyright = "2026 secreto contributors"
+license-file = ["../../../LICENSE", "0"]
+extended-description = """\
+Hybrid post-quantum file encryption (secreto/v1): MLKEM1024-P384, Argon2id, \
+ChaCha20-Poly1305, and optional Ed25519 + ML-DSA-87 signatures. Ships the \
+Rust `secreto` and `secreto-keygen` CLIs."""
+depends = "$auto"
+section = "utils"
+priority = "optional"
+assets = [
+    ["target/release/secreto", "usr/bin/", "755"],
+    ["target/release/secreto-keygen", "usr/bin/", "755"],
+    ["../../../README.md", "usr/share/doc/secreto/README.md", "644"],
+    ["../../../LICENSE", "usr/share/doc/secreto/LICENSE", "644"],
+]
+
+[package.metadata.generate-rpm]
+name = "secreto"
+license = "EUPL-1.2"
+summary = "Hybrid post-quantum file encryption (secreto/v1)"
+url = "https://github.com/mainmanmauricio/secreto"
+assets = [
+    { source = "target/release/secreto", dest = "/usr/bin/secreto", mode = "755" },
+    { source = "target/release/secreto-keygen", dest = "/usr/bin/secreto-keygen", mode = "755" },
+    { source = "../../../README.md", dest = "/usr/share/doc/secreto/README.md", mode = "644", doc = true },
+    { source = "../../../LICENSE", dest = "/usr/share/doc/secreto/LICENSE", mode = "644", doc = true },
+]
 
 [lib]
 name = "secreto_cli"
