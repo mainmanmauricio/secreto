@@ -158,7 +158,14 @@ def encrypt_to(
     if sigblock:
         buf.extend(sigblock)
 
-    flush_full()
+    # Leave a non-empty final chunk (1..=CHUNK). When Padmé makes the inner
+    # plaintext an exact multiple of CHUNK, flushing with `>=` would drain
+    # the buffer and wrongly reject an empty last chunk.
+    while len(buf) > stream.CHUNK:
+        chunk = bytes(buf[: stream.CHUNK])
+        del buf[: stream.CHUNK]
+        out.write(aead.encrypt(stream.chunk_nonce(counter, False), chunk, None))
+        counter += 1
     if not buf:
         raise FormatError("empty STREAM plaintext")
     out.write(aead.encrypt(stream.chunk_nonce(counter, True), bytes(buf), None))

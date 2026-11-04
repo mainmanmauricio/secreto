@@ -319,7 +319,17 @@ void encrypt_to(std::FILE* in, std::FILE* out, const EncryptOptions& opts) {
   buf.insert(buf.end(), static_cast<std::size_t>(k), 0);
   if (signed_file) append(buf, sigblock);
 
-  flush_full();
+  // Leave a non-empty final chunk (1..=kChunkSize). When Padmé makes the
+  // inner plaintext an exact multiple of kChunkSize, flushing with `>=`
+  // would drain the buffer and wrongly reject an empty last chunk.
+  while (buf.size() > stream::kChunkSize) {
+    ByteView chunk(buf.data(), stream::kChunkSize);
+    auto n = stream::chunk_nonce(counter, false);
+    Bytes ct = chacha20poly1305_seal(payload_key, n, {}, chunk);
+    if (std::fwrite(ct.data(), 1, ct.size(), out) != ct.size()) fail(kExitIo, "writing chunk");
+    buf.erase(buf.begin(), buf.begin() + static_cast<std::ptrdiff_t>(stream::kChunkSize));
+    ++counter;
+  }
   if (buf.empty()) format_error("empty STREAM plaintext");
   {
     auto n = stream::chunk_nonce(counter, true);

@@ -214,7 +214,14 @@ pub fn encrypt_to(
         buf.extend_from_slice(&sig.to_bytes());
     }
 
-    flush_full_chunks(&mut enc, &mut buf, writer)?;
+    // Leave a non-empty final chunk (1..=CHUNK_SIZE). When Padmé makes the
+    // inner plaintext an exact multiple of CHUNK_SIZE, flushing with `>=`
+    // would drain the buffer and wrongly reject an empty last chunk.
+    while buf.len() > CHUNK_SIZE {
+        let ct = enc.encrypt_chunk(&buf[..CHUNK_SIZE], false)?;
+        writer.write_all(&ct)?;
+        buf.drain(..CHUNK_SIZE);
+    }
     if buf.is_empty() {
         return Err(Error::Format("empty STREAM plaintext"));
     }

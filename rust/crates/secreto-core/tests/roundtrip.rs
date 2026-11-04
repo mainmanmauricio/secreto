@@ -365,6 +365,36 @@ fn streaming_matches_in_memory() {
         assert_eq!(meta.verified, sign);
     }
 
+    // Padmé can make the inner plaintext an exact multiple of CHUNK_SIZE;
+    // streaming encrypt must still emit a non-empty final STREAM chunk.
+    {
+        let mut n = 1usize;
+        let target = loop {
+            let inner = padme::padme(inner::unpadded_len(n, false));
+            if inner > 0 && inner % stream::CHUNK_SIZE as u64 == 0 {
+                break n;
+            }
+            n += 1;
+            assert!(n < stream::CHUNK_SIZE * 4, "no chunk-aligned pad size");
+        };
+        let pt = data(target);
+        let opts = EncryptOptions {
+            pad: true,
+            ..Default::default()
+        };
+        let mut out = Vec::new();
+        encrypt_to(
+            &mut Cursor::new(&pt),
+            &mut out,
+            Recipients::Keys(&r),
+            &opts,
+        )
+        .unwrap();
+        let mut recovered = Vec::new();
+        decrypt_to(&mut Cursor::new(&out), &mut recovered, &opts_ids(&ids, None)).unwrap();
+        assert_eq!(recovered, pt, "pad-aligned n={target}");
+    }
+
     // Passphrase streaming at default 64 MiB.
     let opts = EncryptOptions::default();
     let mut out = Vec::new();
